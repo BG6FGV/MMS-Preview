@@ -55,4 +55,4 @@ mms-reader/
 BSD 3-Clause. See LICENSE.
 
 MMS Compiler sample files (samples/*.mms) are copyright (c) 2018-2024 Thales,
-also licensed under BSD 3-Clause. Original: https://kamenar.com/mms/
+also licensed under BSD 3-Clause.
