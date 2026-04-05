@@ -1,0 +1,1289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MMS History — Analyzer</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --surface2: #242838;
+    --border: #2e3348;
+    --text: #e1e4ed;
+    --text2: #8b90a5;
+    --accent: #6c8cff;
+    --accent2: #a78bfa;
+    --green: #34d399;
+    --orange: #fbbf24;
+    --red: #f87171;
+    --cyan: #22d3ee;
+    --radius: 10px;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    min-height: 100vh;
+  }
+
+  /* ── Header ── */
+  .header {
+    padding: 18px 32px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+  .header h1 { font-size: 18px; font-weight: 600; color: var(--accent); }
+  .header .subtitle { color: var(--text2); font-size: 13px; }
+
+  /* ── Upload zone ── */
+  .upload-zone {
+    max-width: 640px;
+    margin: 40px auto;
+    border: 2px dashed var(--border);
+    border-radius: var(--radius);
+    padding: 48px 32px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .upload-zone:hover, .upload-zone.dragover {
+    border-color: var(--accent);
+    background: rgba(108,140,255,0.05);
+  }
+  .upload-zone .icon { font-size: 42px; margin-bottom: 10px; opacity: 0.5; }
+  .upload-zone p { color: var(--text2); font-size: 14px; }
+  .upload-zone .hint { font-size: 12px; color: var(--text2); opacity: 0.5; margin-top: 6px; }
+  #fileInput { display: none; }
+
+  /* ── Mode selector (Standard / Expert) ── */
+  .mode-bar {
+    max-width: 640px;
+    margin: 0 auto 20px;
+    display: none;
+  }
+  .mode-bar.active { display: block; }
+  .mode-tabs {
+    display: flex;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+  .mode-tab {
+    flex: 1;
+    padding: 11px 8px;
+    text-align: center;
+    cursor: pointer;
+    background: var(--surface);
+    border: none;
+    color: var(--text2);
+    font-size: 13px;
+    font-weight: 500;
+    transition: all 0.15s;
+    border-right: 1px solid var(--border);
+  }
+  .mode-tab:last-child { border-right: none; }
+  .mode-tab:hover { background: var(--surface2); color: var(--text); }
+  .mode-tab.active { background: var(--accent); color: #fff; font-weight: 600; }
+  .mode-tab .mode-icon { display: block; font-size: 20px; margin-bottom: 2px; }
+  .mode-tab .mode-desc { font-size: 10px; opacity: 0.75; display: block; margin-top: 1px; }
+
+  /* ── File bar ── */
+  .file-bar {
+    max-width: 960px;
+    margin: 0 auto 14px;
+    padding: 0 32px;
+    display: none;
+    align-items: center;
+    gap: 12px;
+  }
+  .file-bar.active { display: flex; }
+  .file-bar .back-btn {
+    color: var(--accent); font-size: 14px; cursor: pointer;
+    text-decoration: none; flex-shrink: 0;
+  }
+  .file-bar .back-btn:hover { text-decoration: underline; }
+  .file-bar .fname { font-weight: 600; font-size: 14px; flex: 1; }
+  .file-bar .fsize { color: var(--text2); font-size: 12px; }
+
+  /* ── Result container ── */
+  .result {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 0 32px 60px;
+    display: none;
+  }
+  .result.active { display: block; }
+
+  /* ── Section cards ── */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    margin-bottom: 16px;
+    overflow: hidden;
+  }
+  .card-header {
+    padding: 12px 20px;
+    background: var(--surface2);
+    font-weight: 600;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text2);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .card-header .badge {
+    border-radius: 4px; padding: 1px 7px;
+    font-size: 11px; font-weight: 700;
+  }
+  .card-header .badge.green { background: rgba(52,211,153,0.2); color: var(--green); }
+  .card-header .badge.orange { background: rgba(251,191,36,0.2); color: var(--orange); }
+  .card-header .badge.cyan { background: rgba(34,211,238,0.2); color: var(--cyan); }
+  .card-body { padding: 20px; }
+
+  /* ── Message envelope (Standard) ── */
+  .envelope {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0;
+  }
+  .env-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  .env-row:last-child { border-bottom: none; }
+  .envelope .env-row:nth-child(odd):last-child {
+    grid-column: 1 / -1;
+  }
+  .env-label {
+    color: var(--text2);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    min-width: 60px;
+    padding-top: 2px;
+    flex-shrink: 0;
+  }
+  .env-value {
+    font-size: 14px;
+    word-break: break-all;
+    flex: 1;
+  }
+  .env-value.mono {
+    font-family: "SF Mono", Consolas, monospace;
+    font-size: 13px;
+  }
+  .env-value .tag {
+    display: inline-block; margin-left: 6px;
+    padding: 1px 6px; border-radius: 3px;
+    font-size: 10px; font-weight: 600;
+    background: var(--surface2); color: var(--text2);
+    vertical-align: middle;
+  }
+
+  /* ── Text body ── */
+  .msg-text-box {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px 20px;
+    font-size: 14px;
+    line-height: 1.7;
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-height: 400px;
+    overflow-y: auto;
+  }
+  .msg-text-box.html-content {
+    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+  }
+  .text-part-block { margin-bottom: 12px; }
+  .text-part-block:last-child { margin-bottom: 0; }
+  .text-part-label {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 6px;
+  }
+  .text-part-name { font-size: 12px; color: var(--text2); }
+
+  /* ── Image list (Standard) ── */
+  .img-list { display: flex; flex-direction: column; gap: 12px; }
+  .img-list-item {
+    display: flex; align-items: center; gap: 14px;
+    padding: 10px 12px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+  }
+  .img-list-thumb {
+    width: 64px; height: 64px; border-radius: 6px;
+    overflow: hidden; flex-shrink: 0;
+    background: #000; display: flex; align-items: center; justify-content: center;
+  }
+  .img-list-thumb img { width: 100%; height: 100%; object-fit: contain; display: block; }
+  .img-list-info { flex: 1; min-width: 0; }
+  .img-list-name { font-weight: 500; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .img-list-meta { font-size: 12px; color: var(--text2); margin-top: 2px; }
+
+  /* ── Audio / Video list ── */
+  .media-list { display: flex; flex-direction: column; gap: 10px; }
+  .media-list-item {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 8px; padding: 12px 14px;
+  }
+  .media-list-item audio, .media-list-item video { width: 100%; display: block; }
+  .media-list-label {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 8px; font-size: 13px;
+  }
+  .media-list-name { font-weight: 500; }
+  .media-list-meta { color: var(--text2); font-size: 12px; }
+
+  /* ── Download button ── */
+  .dl-btn {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 4px 10px;
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 5px; color: var(--accent); font-size: 12px;
+    cursor: pointer; text-decoration: none;
+    transition: all 0.15s; white-space: nowrap; flex-shrink: 0;
+  }
+  .dl-btn:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .dl-btn::before { content: '\2B07'; font-size: 12px; }
+
+  /* ── Source info note ── */
+  .source-note {
+    font-size: 12px; color: var(--text2);
+    padding: 6px 12px; border-radius: 5px;
+    background: rgba(251,191,36,0.08); border: 1px solid rgba(251,191,36,0.2);
+    display: inline-flex; align-items: center; gap: 6px;
+  }
+
+  /* ── Part list (fallback / attachments) ── */
+  .part-row {
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 0; border-bottom: 1px solid var(--border);
+    font-size: 14px;
+  }
+  .part-row:last-child { border-bottom: none; }
+  .part-icon {
+    width: 32px; height: 32px; border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700; flex-shrink: 0;
+  }
+  .part-icon.img  { background: rgba(108,140,255,0.15); color: var(--accent); }
+  .part-icon.vid  { background: rgba(248,113,113,0.15); color: var(--red); }
+  .part-icon.aud  { background: rgba(167,139,250,0.15); color: var(--accent2); }
+  .part-icon.txt  { background: rgba(52,211,153,0.15); color: var(--green); }
+  .part-icon.smil { background: rgba(251,191,36,0.15); color: var(--orange); }
+  .part-icon.other{ background: var(--surface2); color: var(--text2); }
+  .part-name { font-weight: 500; flex: 1; }
+  .part-type { color: var(--text2); font-size: 12px; font-family: "SF Mono", Consolas, monospace; }
+  .part-size { color: var(--text2); font-size: 12px; min-width: 70px; text-align: right; }
+
+  /* ── SMIL timeline ── */
+  .smil-region {
+    display: inline-block; background: var(--surface2);
+    border: 1px solid var(--border); border-radius: 6px;
+    padding: 5px 10px; margin: 3px; font-size: 12px;
+  }
+  .smil-region .name { color: var(--accent); font-weight: 600; }
+  .smil-region .dims { color: var(--text2); margin-left: 6px; }
+  .smil-par {
+    background: var(--surface2); border-radius: 6px;
+    padding: 10px 14px; margin-bottom: 8px;
+  }
+  .smil-par .dur { font-size: 11px; color: var(--orange); font-weight: 600; margin-bottom: 6px; }
+  .smil-media-item { display: flex; align-items: center; gap: 8px; font-size: 13px; padding: 2px 0; }
+  .smil-media-item .tag {
+    background: var(--accent); color: #fff; border-radius: 3px;
+    padding: 0 5px; font-size: 10px; font-weight: 700;
+  }
+  .smil-media-item .src { color: var(--text2); font-family: monospace; font-size: 12px; }
+  .smil-media-item .region-ref { color: var(--text2); font-size: 12px; }
+
+  /* ── SMIL Player ── */
+  .smil-player {
+    background: #000;
+    border-radius: 10px;
+    overflow: hidden;
+    position: relative;
+    max-width: 320px;
+    margin: 0 auto;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.6);
+  }
+  .smil-player-screen {
+    width: 100%;
+    min-height: 200px;
+    background: #111;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    overflow: hidden;
+  }
+  #smilPnlContent {
+    width: 100%;
+    min-height: 200px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 12px;
+    color: var(--text);
+    font-size: 14px;
+    text-align: center;
+  }
+  #smilPnlContent img {
+    max-width: 100%;
+    max-height: 280px;
+    object-fit: contain;
+    border-radius: 4px;
+  }
+  .smil-player-hud {
+    position: absolute;
+    top: 8px; right: 10px;
+    background: rgba(0,0,0,0.6);
+    color: #fff;
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 12px;
+    pointer-events: none;
+  }
+  .smil-player-controls {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    background: #1a1d27;
+    border-top: 1px solid var(--border);
+  }
+  .smil-ctrl-btn {
+    background: var(--accent);
+    border: none; color: #fff;
+    border-radius: 6px; padding: 5px 12px;
+    cursor: pointer; font-size: 12px; font-weight: 600;
+  }
+  .smil-ctrl-btn:hover { opacity: 0.85; }
+  .smil-ctrl-btn.stop-btn { background: var(--surface2); color: var(--text2); }
+  .smil-frame-dots {
+    display: flex; gap: 5px; flex: 1; justify-content: center;
+  }
+  .smil-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--border); cursor: pointer; transition: background 0.2s;
+  }
+  .smil-dot.active { background: var(--accent); }
+  .smil-player-info {
+    padding: 8px 14px 10px;
+    background: #1a1d27;
+    font-size: 11px;
+    color: var(--text2);
+    text-align: center;
+    border-top: 1px solid var(--border);
+  }
+
+  /* ── Hex view (Expert) ── */
+  .hex-container {
+    font-family: "SF Mono", "Cascadia Code", Consolas, monospace;
+    font-size: 12px; line-height: 1.7; overflow-x: auto;
+  }
+  .hex-line {
+    display: flex; gap: 16px; padding: 1px 0;
+    border-bottom: 1px solid rgba(46,51,72,0.4);
+  }
+  .hex-line:hover { background: rgba(108,140,255,0.04); }
+  .hex-offset { color: var(--text2); min-width: 80px; text-align: right; user-select: none; }
+  .hex-data { display: flex; gap: 3px; flex-wrap: nowrap; }
+  .hex-cell {
+    display: inline-block; width: 22px; text-align: center;
+    border-radius: 2px; padding: 0 1px; transition: background 0.1s;
+  }
+  .hex-cell.highlighted { color: #fff; font-weight: 600; }
+  .hex-ascii { color: var(--text2); margin-left: 12px; white-space: pre; letter-spacing: 1px; }
+  .hex-controls {
+    display: flex; align-items: center; gap: 12px;
+    padding: 12px 20px; background: var(--surface2);
+    border-top: 1px solid var(--border); font-size: 13px;
+  }
+  .hex-controls button {
+    background: var(--accent); color: #fff; border: none;
+    border-radius: 4px; padding: 6px 14px; cursor: pointer;
+    font-size: 12px; font-weight: 600;
+  }
+  .hex-controls button:disabled { opacity: 0.4; cursor: default; }
+  .hex-controls .page-info { color: var(--text2); font-size: 12px; }
+  .hex-search { display: flex; gap: 8px; align-items: center; margin-left: auto; }
+  .hex-search input {
+    background: var(--bg); border: 1px solid var(--border);
+    color: var(--text); border-radius: 4px;
+    padding: 5px 10px; font-size: 12px; width: 200px;
+    font-family: "SF Mono", Consolas, monospace;
+  }
+  .hex-search input::placeholder { color: var(--text2); opacity: 0.5; }
+  .hex-search button {
+    background: var(--surface2); color: var(--text);
+    border: 1px solid var(--border); border-radius: 4px;
+    padding: 5px 10px; cursor: pointer; font-size: 12px;
+  }
+
+  /* ── Scan elements (Expert) ── */
+  .scan-element {
+    display: flex; align-items: flex-start; gap: 14px;
+    padding: 12px 0; border-bottom: 1px solid var(--border);
+  }
+  .scan-element:last-child { border-bottom: none; }
+  .scan-icon {
+    width: 40px; height: 40px; border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px; flex-shrink: 0; font-weight: 700;
+  }
+  .scan-icon.image { background: rgba(108,140,255,0.15); color: var(--accent); }
+  .scan-icon.audio { background: rgba(167,139,250,0.15); color: var(--accent2); }
+  .scan-icon.video { background: rgba(248,113,113,0.15); color: var(--red); }
+  .scan-icon.text  { background: rgba(52,211,153,0.15); color: var(--green); }
+  .scan-icon.other { background: var(--surface2); color: var(--text2); }
+  .scan-info { flex: 1; min-width: 0; }
+  .scan-info .scan-name { font-weight: 600; font-size: 14px; }
+  .scan-info .scan-meta { color: var(--text2); font-size: 12px; margin-top: 2px; }
+  .scan-info .scan-meta code {
+    background: var(--surface2); padding: 1px 6px; border-radius: 3px;
+    font-family: "SF Mono", Consolas, monospace; font-size: 11px;
+  }
+  .scan-confidence {
+    padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; flex-shrink: 0;
+  }
+  .scan-confidence.high   { background: rgba(52,211,153,0.15); color: var(--green); }
+  .scan-confidence.medium { background: rgba(251,191,36,0.15); color: var(--orange); }
+  .scan-confidence.low    { background: rgba(248,113,113,0.15); color: var(--red); }
+  .scan-preview {
+    margin-top: 8px; max-width: 240px; border-radius: 6px; overflow: hidden;
+    border: 1px solid var(--border);
+  }
+  .scan-preview img, .scan-preview video { width: 100%; display: block; max-height: 180px; object-fit: contain; background: #000; }
+  .scan-download {
+    display: inline-flex; align-items: center; gap: 4px;
+    margin-top: 6px; padding: 4px 10px;
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 5px; color: var(--accent); font-size: 12px;
+    cursor: pointer; text-decoration: none; transition: all 0.15s;
+  }
+  .scan-download:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .scan-download::before { content: '\2B07'; font-size: 14px; }
+
+  /* ── Special attempts (Expert) ── */
+  .attempt-row {
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 0; border-bottom: 1px solid var(--border); font-size: 14px;
+  }
+  .attempt-row:last-child { border-bottom: none; }
+  .attempt-status {
+    width: 24px; height: 24px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; flex-shrink: 0;
+  }
+  .attempt-status.ok   { background: rgba(52,211,153,0.2); color: var(--green); }
+  .attempt-status.fail { background: rgba(248,113,113,0.2); color: var(--red); }
+  .attempt-name { font-weight: 500; flex: 1; }
+  .attempt-note { color: var(--text2); font-size: 12px; }
+
+  /* ── Field grid ── */
+  .field-grid {
+    display: grid;
+    grid-template-columns: 140px 1fr;
+    gap: 8px 16px;
+    font-size: 14px;
+  }
+  .field-label { color: var(--text2); font-size: 12px; text-transform: uppercase; letter-spacing: 0.3px; padding-top: 2px; }
+  .field-value { word-break: break-word; }
+  .field-value.mono {
+    font-family: "SF Mono", Consolas, monospace; font-size: 13px;
+    background: var(--surface2); padding: 2px 8px; border-radius: 4px; display: inline-block;
+  }
+
+  /* ── Error ── */
+  .error-msg {
+    background: rgba(248,113,113,0.1); border: 1px solid rgba(248,113,113,0.3);
+    color: var(--red); padding: 16px 20px; border-radius: var(--radius);
+    font-size: 14px; max-width: 640px; margin: 20px auto; display: none;
+  }
+  .error-msg.active { display: block; }
+
+  /* ── Loading ── */
+  .loading { text-align: center; padding: 40px; color: var(--text2); display: none; }
+  .loading.active { display: block; }
+  .spinner {
+    width: 32px; height: 32px;
+    border: 3px solid var(--border); border-top-color: var(--accent);
+    border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 12px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Responsive ── */
+  @media (max-width: 640px) {
+    .header { padding: 16px; }
+    .result { padding: 0 16px 40px; }
+    .file-bar { padding: 0 16px; }
+    .upload-zone { margin: 24px 16px; padding: 32px 16px; }
+    .mode-bar { margin: 0 16px 20px; }
+    .envelope { grid-template-columns: 1fr; }
+    .hex-search { margin-left: 0; margin-top: 8px; width: 100%; }
+    .hex-search input { flex: 1; width: auto; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ── Header ── -->
+<div class="header">
+  <div>
+    <h1>MMS History</h1>
+    <div class="subtitle">MMS Analyzer &mdash; Standard / Expert</div>
+  </div>
+</div>
+
+<!-- ── Upload ── -->
+<div class="upload-zone" id="dropZone">
+  <div class="icon">&#128194;</div>
+  <p>Drop an MMS file here, or click to browse</p>
+  <div class="hint">.mms .dat .mms_dat or any binary blob</div>
+  <input type="file" id="fileInput">
+</div>
+
+<!-- ── Mode selector ── -->
+<div class="mode-bar" id="modeBar">
+  <div class="mode-tabs">
+    <button class="mode-tab active" data-mode="standard">
+      <span class="mode-icon">&#128172;</span>
+      Standard
+      <span class="mode-desc">Message view</span>
+    </button>
+    <button class="mode-tab" data-mode="expert">
+      <span class="mode-icon">&#128269;</span>
+      Expert
+      <span class="mode-desc">Hex + Scan</span>
+    </button>
+  </div>
+</div>
+
+<!-- ── File bar ── -->
+<div class="file-bar" id="fileBar">
+  <a class="back-btn" href="javascript:void(0)" onclick="resetToUpload()">&larr; New File</a>
+  <span class="fname" id="fileBarName"></span>
+  <span class="fsize" id="fileBarSize"></span>
+</div>
+
+<!-- ── Error ── -->
+<div class="error-msg" id="errorMsg"></div>
+
+<!-- ── Loading ── -->
+<div class="loading" id="loading">
+  <div class="spinner"></div>
+  <div id="loadingText">Parsing...</div>
+</div>
+
+<!-- ── Result ── -->
+<div class="result" id="result"></div>
+
+<script>
+(function() {
+  const dropZone  = document.getElementById('dropZone');
+  const fileInput = document.getElementById('fileInput');
+  const modeBar   = document.getElementById('modeBar');
+  const fileBar   = document.getElementById('fileBar');
+  const resultEl  = document.getElementById('result');
+  const loadingEl = document.getElementById('loading');
+  const loadingText = document.getElementById('loadingText');
+  const errorEl   = document.getElementById('errorMsg');
+  const modeTabs  = document.querySelectorAll('.mode-tab');
+
+  let currentFile = null;
+  let currentMode = 'standard';
+
+  // ── Events ──
+  dropZone.addEventListener('click', () => fileInput.click());
+  dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
+  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+  dropZone.addEventListener('drop', e => {
+    e.preventDefault(); dropZone.classList.remove('dragover');
+    if (e.dataTransfer.files[0]) onFileSelected(e.dataTransfer.files[0]);
+  });
+  fileInput.addEventListener('change', () => {
+    if (fileInput.files[0]) onFileSelected(fileInput.files[0]);
+  });
+  modeTabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+      if (!currentFile) return;
+      modeTabs.forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      currentMode = tab.dataset.mode;
+      analyze(currentFile, currentMode);
+    });
+  });
+
+  function onFileSelected(file) {
+    currentFile = file;
+    document.getElementById('fileBarName').textContent = file.name;
+    document.getElementById('fileBarSize').textContent = formatBytes(file.size);
+    dropZone.style.display = 'none';
+    modeBar.classList.add('active');
+    fileBar.classList.add('active');
+    errorEl.classList.remove('active');
+    analyze(file, currentMode);
+  }
+
+  function resetToUpload() {
+    currentFile = null;
+    currentMode = 'standard';
+    dropZone.style.display = '';
+    modeBar.classList.remove('active');
+    fileBar.classList.remove('active');
+    resultEl.classList.remove('active');
+    resultEl.innerHTML = '';
+    errorEl.classList.remove('active');
+    fileInput.value = '';
+    modeTabs.forEach(t => t.classList.remove('active'));
+    modeTabs[0].classList.add('active');
+  }
+
+  // ── Analyze ──
+  async function analyze(file, mode) {
+    loadingEl.classList.add('active');
+    resultEl.classList.remove('active');
+    errorEl.classList.remove('active');
+    resultEl.innerHTML = '';
+    loadingText.textContent = mode === 'standard' ? 'Parsing message...' : 'Hex dump + signature scan...';
+
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      const resp = await fetch('/analyze?mode=' + encodeURIComponent(mode), { method: 'POST', body: fd });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.error || 'HTTP ' + resp.status);
+      renderResult(data, mode, file.name);
+    } catch(e) {
+      errorEl.textContent = e.message;
+      errorEl.classList.add('active');
+    } finally {
+      loadingEl.classList.remove('active');
+    }
+  }
+
+  // ── Dispatch ──
+  function renderResult(data, mode, filename) {
+    resultEl.classList.add('active');
+    let html = '';
+
+    if (data.error) {
+      html += card('Error', '<div style="color:var(--red)">' + esc(data.error) + '</div>');
+    }
+
+    if (mode === 'standard') {
+      html += renderStandardMode(data, filename);
+    } else {
+      html += renderExpertMode(data, filename);
+    }
+
+    resultEl.innerHTML = html;
+    if (data.hexView) bindHexControls(data.hexView);
+  }
+
+  // ══════════════════════════════════════════
+  //   STANDARD MODE
+  // ══════════════════════════════════════════
+  function renderStandardMode(data, filename) {
+    const std = data.standard;
+    if (!std) {
+      return card('Standard Parse', '<div style="color:var(--text2)">No result.</div>');
+    }
+
+    const meta   = std.meta   || {};
+    const hdr    = std.header || {};
+    const parts  = std.parts  || [];
+    const smil   = std.smil;
+    const fHash  = std._fileHash || '';
+    let html = '';
+
+    // ── 1. Envelope (收发件人 / 时间 / 主题) ──
+    const envRows = [];
+    if (hdr.from)       envRows.push(envRow('From',    esc(hdr.from) + (hdr.fromType ? '<span class="tag">' + esc(hdr.fromType) + '</span>' : '')));
+    if (hdr.to)         envRows.push(envRow('To',      esc(hdr.to)));
+    if (hdr.dateDisplay) envRows.push(envRow('Date',   esc(hdr.dateDisplay)));
+    if (hdr.subject)    envRows.push(envRow('Subject', esc(hdr.subject)));
+    if (hdr.messageClass || hdr.priority) {
+      envRows.push(envRow('Class / Priority',
+        [hdr.messageClass, hdr.priority].filter(Boolean).map(esc).join(' &nbsp;/&nbsp; ')
+      ));
+    }
+    // Fallbacks when standard header is empty (special fallback)
+    if (envRows.length === 0) {
+      envRows.push(envRow('From', '<span style="color:var(--text2)">—</span>'));
+      envRows.push(envRow('To',   '<span style="color:var(--text2)">—</span>'));
+      envRows.push(envRow('Date', '<span style="color:var(--text2)">—</span>'));
+    }
+
+    let envelopeHtml = '<div class="envelope">' + envRows.join('') + '</div>';
+    // Append meta info line
+    const metaBadges = [];
+    metaBadges.push('MMS ' + esc(meta.version || '?'));
+    metaBadges.push(esc(meta.partCount || 0) + ' parts');
+    metaBadges.push(formatBytes(meta.fileSize));
+    if (std._specialFormat) {
+      metaBadges.push('<span style="color:var(--orange)">via ' + esc(std._specialFormat) + '</span>');
+    }
+    envelopeHtml += '<div style="padding:10px 16px;border-top:1px solid var(--border);font-size:12px;color:var(--text2)">'
+      + metaBadges.join(' &nbsp;&bull;&nbsp; ')
+      + '</div>';
+
+    html += card('Message', envelopeHtml);
+
+    // ── 2. Text content ──
+    const textParts = parts.filter(p => p.contentType && (p.contentType.startsWith('text/plain') || p.contentType.startsWith('text/html')) && p.text);
+    if (textParts.length) {
+      let textHtml = '';
+      textParts.forEach(p => {
+        const isHtml = p.contentType === 'text/html';
+        const dlName = p.filename || ('text_' + p.index + (isHtml ? '.html' : '.txt'));
+        textHtml += '<div class="text-part-block">';
+        if (textParts.length > 1) {
+          textHtml += '<div class="text-part-label">'
+            + '<span class="text-part-name">' + esc(p.filename || ('Part ' + p.index)) + '</span>'
+            + '<a class="dl-btn" href="/part/' + fHash + '/' + p.index + '?download=1&name=' + encodeURIComponent(dlName) + '" download>Extract</a>'
+            + '</div>';
+        }
+        textHtml += '<div class="msg-text-box' + (isHtml ? ' html-content' : '') + '">' + esc(p.text) + '</div>';
+        if (textParts.length === 1) {
+          textHtml += '<div style="margin-top:8px;text-align:right"><a class="dl-btn" href="/part/' + fHash + '/' + p.index + '?download=1&name=' + encodeURIComponent(dlName) + '" download>Extract</a></div>';
+        }
+        textHtml += '</div>';
+      });
+      html += card('Text Content', textHtml);
+    }
+
+    // ── 3. Images ──
+    const imgParts = parts.filter(p => p.contentType && p.contentType.startsWith('image/'));
+    if (imgParts.length) {
+      const imgHtml = '<div class="img-list">'
+        + imgParts.map(p => {
+          const dlName = p.filename || ('image_' + p.index + '.jpg');
+          return '<div class="img-list-item">'
+            + '<div class="img-list-thumb"><img src="/part/' + fHash + '/' + p.index + '" alt="' + esc(p.filename) + '" loading="lazy"></div>'
+            + '<div class="img-list-info">'
+              + '<div class="img-list-name">' + esc(p.filename || ('Image ' + p.index)) + '</div>'
+              + '<div class="img-list-meta">' + esc(p.contentType) + ' &nbsp;&bull;&nbsp; ' + formatBytes(p.size) + '</div>'
+            + '</div>'
+            + '<a class="dl-btn" href="/part/' + fHash + '/' + p.index + '?download=1&name=' + encodeURIComponent(dlName) + '" download>Extract</a>'
+          + '</div>';
+        }).join('')
+        + '</div>';
+      html += card('Images (' + imgParts.length + ')', imgHtml);
+    }
+
+    // ── 4. Audio ──
+    const audParts = parts.filter(p => p.contentType && p.contentType.startsWith('audio/'));
+    if (audParts.length) {
+      const audHtml = '<div class="media-list">'
+        + audParts.map(p => {
+          const dlName = p.filename || ('audio_' + p.index + '.mid');
+          return '<div class="media-list-item">'
+            + '<div class="media-list-label">'
+              + '<span class="media-list-name">' + esc(p.filename || ('Audio ' + p.index)) + '</span>'
+              + '<span class="media-list-meta">' + esc(p.contentType) + ' &nbsp; ' + formatBytes(p.size) + '</span>'
+              + '<a class="dl-btn" href="/part/' + fHash + '/' + p.index + '?download=1&name=' + encodeURIComponent(dlName) + '" download>Extract</a>'
+            + '</div>'
+            + '<audio controls><source src="/part/' + fHash + '/' + p.index + '" type="' + esc(p.contentType) + '"></audio>'
+          + '</div>';
+        }).join('')
+        + '</div>';
+      html += card('Audio (' + audParts.length + ')', audHtml);
+    }
+
+    // ── 5. Video ──
+    const vidParts = parts.filter(p => p.contentType && p.contentType.startsWith('video/'));
+    if (vidParts.length) {
+      const vidHtml = '<div class="media-list">'
+        + vidParts.map(p => {
+          const dlName = p.filename || ('video_' + p.index + '.3gp');
+          return '<div class="media-list-item">'
+            + '<div class="media-list-label">'
+              + '<span class="media-list-name">' + esc(p.filename || ('Video ' + p.index)) + '</span>'
+              + '<span class="media-list-meta">' + esc(p.contentType) + ' &nbsp; ' + formatBytes(p.size) + '</span>'
+              + '<a class="dl-btn" href="/part/' + fHash + '/' + p.index + '?download=1&name=' + encodeURIComponent(dlName) + '" download>Extract</a>'
+            + '</div>'
+            + '<video controls preload="metadata"><source src="/part/' + fHash + '/' + p.index + '" type="' + esc(p.contentType) + '"></video>'
+          + '</div>';
+        }).join('')
+        + '</div>';
+      html += card('Video (' + vidParts.length + ')', vidHtml);
+    }
+
+    // ── 6. SMIL Player + Timeline ──
+    if (smil && smil.pars && smil.pars.length) {
+
+      // -- 6a. Build frames for SMIL player --
+      // Map SMIL src to parts by filename / contentLocation / contentId
+      const partBySrc = {};
+      parts.forEach(p => {
+        if (p.filename)         partBySrc[p.filename]         = p;
+        if (p.contentLocation)  partBySrc[p.contentLocation]  = p;
+        if (p.contentId)        partBySrc[p.contentId]        = p;
+        // strip angle brackets from Content-Id
+        if (p.contentId) {
+          const stripped = p.contentId.replace(/^<|>$/g, '');
+          partBySrc[stripped] = p;
+        }
+      });
+
+      const frames = smil.pars.map(par => {
+        // duration: "10s" -> 10000, "5000ms" -> 5000, bare number -> ms
+        let durMs = 4000;
+        if (par.duration) {
+          const ds = String(par.duration).trim();
+          if (ds.endsWith('ms')) {
+            durMs = parseFloat(ds) || 4000;
+          } else if (ds.endsWith('s')) {
+            durMs = (parseFloat(ds) || 4) * 1000;
+          } else {
+            const n = parseFloat(ds);
+            durMs = isNaN(n) ? 4000 : (n < 100 ? n * 1000 : n);
+          }
+        }
+
+        // Content div: images + text in this frame
+        let contentHtml = '';
+        let audioSrc = null;
+        let audioType = 'audio/mpeg';
+
+        par.media.forEach(m => {
+          const srcKey = m.src || '';
+          // strip CID: prefix
+          const cleanSrc = srcKey.replace(/^cid:/i, '').replace(/^<|>$/g, '');
+          const part = partBySrc[cleanSrc] || partBySrc[srcKey];
+          if (m.tag === 'img' && part) {
+            contentHtml += '<img src="/part/' + fHash + '/' + part.index + '" alt="' + esc(part.filename || 'image') + '">';
+          } else if (m.tag === 'text' && part && part.text) {
+            contentHtml += '<div style="color:#fff;font-size:14px;line-height:1.6;white-space:pre-wrap">' + esc(part.text) + '</div>';
+          } else if (m.tag === 'audio' && part) {
+            audioSrc = '/part/' + fHash + '/' + part.index;
+            audioType = part.contentType || 'audio/mpeg';
+          } else if ((m.tag === 'img' || m.tag === 'text') && cleanSrc) {
+            // src reference but no matching part — show filename as label
+            if (m.tag === 'img') {
+              contentHtml += '<div style="color:var(--text2);font-size:12px">&#128444; ' + esc(cleanSrc) + '</div>';
+            }
+          }
+        });
+        if (!contentHtml) {
+          contentHtml = '<div style="color:var(--text2);font-size:12px">Frame ' + (smil.pars.indexOf(par) + 1) + '</div>';
+        }
+
+        return { contentHtml, audioSrc, audioType, durMs };
+      });
+
+      const totalFrames = frames.length;
+      const playerDivId = 'smilPlayer_' + fHash;
+      const contentDivId = 'smilContent_' + fHash;
+      const audioDivId   = 'smilAudio_'   + fHash;
+      const hudId        = 'smilHud_'     + fHash;
+      const dotsId       = 'smilDots_'    + fHash;
+      const infoId       = 'smilInfo_'    + fHash;
+
+      // Build dot indicators
+      const dotsHtml = frames.map((_, i) =>
+        '<span class="smil-dot' + (i === 0 ? ' active' : '') + '" data-frame="' + i + '" onclick="smilGoTo_' + fHash + '(' + i + ')"></span>'
+      ).join('');
+
+      const playerHtml = `
+<div class="smil-player" id="${playerDivId}">
+  <div class="smil-player-screen">
+    <div id="${contentDivId}"></div>
+    <div class="smil-player-hud" id="${hudId}">1 / ${totalFrames}</div>
+  </div>
+  <div id="${audioDivId}" style="display:none"></div>
+  <div class="smil-player-controls">
+    <button class="smil-ctrl-btn" onclick="smilPlay_${fHash}()">&#9654; Play</button>
+    <button class="smil-ctrl-btn stop-btn" onclick="smilStop_${fHash}()">&#9646;&#9646; Pause</button>
+    <div class="smil-frame-dots" id="${dotsId}">${dotsHtml}</div>
+  </div>
+  <div class="smil-player-info" id="${infoId}">Frame 1 &mdash; ${frames[0] ? (frames[0].durMs / 1000).toFixed(1) : '?'}s</div>
+</div>`;
+
+      // Serialize frames data into JS-safe JSON
+      const framesJson = JSON.stringify(frames.map(f => ({
+        h: f.contentHtml,
+        a: f.audioSrc,
+        at: f.audioType,
+        d: f.durMs,
+      })));
+
+      const playerScript = `
+<script>
+(function(){
+  var FRAMES = ${framesJson};
+  var _idx = 0, _timer = null, _playing = false;
+  var _hash = ${JSON.stringify(fHash)};
+
+  function _getEl(id){ return document.getElementById(id); }
+  var contentEl = function(){ return _getEl(${JSON.stringify(contentDivId)}); };
+  var audioEl   = function(){ return _getEl(${JSON.stringify(audioDivId)}); };
+  var hudEl     = function(){ return _getEl(${JSON.stringify(hudId)}); };
+  var infoEl    = function(){ return _getEl(${JSON.stringify(infoId)}); };
+  var dotsEl    = function(){ return _getEl(${JSON.stringify(dotsId)}); };
+
+  function renderFrame(idx){
+    var f = FRAMES[idx];
+    if(!f) return;
+    var c = contentEl(); if(c) c.innerHTML = f.h;
+    var h = hudEl();    if(h) h.textContent = (idx+1) + ' / ' + FRAMES.length;
+    var info = infoEl();
+    if(info) info.innerHTML = 'Frame ' + (idx+1) + ' &mdash; ' + (f.d/1000).toFixed(1) + 's';
+    // dots
+    var dots = dotsEl();
+    if(dots){
+      var allDots = dots.querySelectorAll('.smil-dot');
+      allDots.forEach(function(d,i){ d.classList.toggle('active', i===idx); });
+    }
+    // audio
+    var ae = audioEl();
+    if(ae){
+      if(f.a){
+        ae.innerHTML = '<audio autoplay loop style="display:none"><source src="'+f.a+'" type="'+f.at+'"></audio>';
+      } else {
+        ae.innerHTML = '';
+      }
+    }
+  }
+
+  function show(index){
+    if(index >= FRAMES.length) index = 0;
+    _idx = index;
+    renderFrame(_idx);
+    if(_playing){
+      var dur = FRAMES[_idx].d || 4000;
+      _timer = setTimeout(function(){ show(_idx + 1); }, dur);
+    }
+  }
+
+  window['smilPlay_'+_hash] = function(){
+    if(_playing) return;
+    _playing = true;
+    show(_idx);
+  };
+  window['smilStop_'+_hash] = function(){
+    _playing = false;
+    if(_timer){ clearTimeout(_timer); _timer = null; }
+    var ae = audioEl(); if(ae) ae.innerHTML = '';
+  };
+  window['smilGoTo_'+_hash] = function(i){
+    window['smilStop_'+_hash]();
+    _idx = i;
+    renderFrame(_idx);
+  };
+
+  // Auto-render first frame (not auto-play)
+  renderFrame(0);
+})();
+<\/script>`;
+
+      html += card('SMIL Playback (' + totalFrames + ' frames)', playerHtml + playerScript);
+
+      // -- 6b. SMIL Timeline card (static reference) --
+      let smilHtml = '';
+      if (smil.regions && smil.regions.length) {
+        smilHtml += '<div style="margin-bottom:12px">';
+        smil.regions.forEach(r => {
+          smilHtml += '<div class="smil-region"><span class="name">' + esc(r.id) + '</span><span class="dims">' + esc(r.width) + ' x ' + esc(r.height) + '</span></div>';
+        });
+        smilHtml += '</div>';
+      }
+      smil.pars.forEach(par => {
+        smilHtml += '<div class="smil-par">';
+        if (par.duration) smilHtml += '<div class="dur">&#9201; ' + esc(par.duration) + '</div>';
+        smilHtml += par.media.map(m =>
+          '<div class="smil-media-item"><span class="tag">' + esc(m.tag) + '</span><span class="src">' + esc(m.src) + '</span>'
+          + (m.region ? '<span class="region-ref">&#8594; ' + esc(m.region) + '</span>' : '') + '</div>'
+        ).join('');
+        smilHtml += '</div>';
+      });
+      html += card('SMIL Timeline', smilHtml);
+    }
+
+    // ── 7. All attachments (compact list) ──
+    const nonSmilParts = parts.filter(p => p.contentType && !p.contentType.includes('smil'));
+    if (nonSmilParts.length) {
+      html += card('All Attachments (' + nonSmilParts.length + ')',
+        nonSmilParts.map(p => partRow(p, fHash)).join('')
+      );
+    }
+
+    return html;
+  }
+
+  // ══════════════════════════════════════════
+  //   EXPERT MODE  (hex + scan + special)
+  // ══════════════════════════════════════════
+  function renderExpertMode(data, filename) {
+    let html = '';
+
+    // Standard parse summary (if available)
+    if (data.standard) {
+      const std  = data.standard;
+      const meta = std.meta   || {};
+      const hdr  = std.header || {};
+      const parts = std.parts || [];
+      const fHash = std._fileHash || '';
+
+      let summaryHtml = '<div class="field-grid">'
+        + field('File', esc(filename))
+        + field('Type', esc(meta.type || 'unknown'))
+        + field('Version', 'MMS ' + esc(meta.version || '?'))
+        + field('Size', formatBytes(meta.fileSize))
+        + field('Parts', String(meta.partCount || 0));
+      if (hdr.dateDisplay) summaryHtml += field('Date', esc(hdr.dateDisplay));
+      if (hdr.from)        summaryHtml += field('From', esc(hdr.from));
+      if (hdr.to)          summaryHtml += field('To',   esc(hdr.to));
+      summaryHtml += '</div>';
+      html += card('Parsed Summary', summaryHtml);
+
+      if (parts.length) {
+        html += card('Parts (' + parts.length + ')', parts.map(p => partRow(p, fHash)).join(''));
+      }
+    }
+
+    // Special format detection
+    if (data.special) {
+      html += renderSpecialResult(data.special);
+    }
+
+    // Hex view
+    if (data.hexView) {
+      html += renderHexView(data.hexView);
+    }
+
+    // Signature scan
+    if (data.scan) {
+      html += renderScanResult(data.scan);
+    }
+
+    return html;
+  }
+
+  // ── Special format result ──
+  function renderSpecialResult(special) {
+    const attempts = special.attempts || [];
+    let html = '';
+
+    html += card('Format Detection',
+      '<div style="font-size:13px;color:var(--text2);margin-bottom:12px">'
+      + (special.success
+        ? '<span class="badge green">Format identified</span>'
+        : '<span style="color:var(--orange)">No vendor format matched</span>')
+      + '</div>'
+      + attempts.map(a => {
+        const status = a.success ? 'ok' : 'fail';
+        const note = a.error || (a.notes || []).join('; ') || '';
+        return '<div class="attempt-row">'
+          + '<div class="attempt-status ' + status + '">' + (a.success ? '&#10003;' : '&#10007;') + '</div>'
+          + '<div class="attempt-name">' + esc(a.formatName) + (a.formatVersion ? ' <span style="color:var(--text2);font-size:12px">v' + esc(a.formatVersion) + '</span>' : '') + '</div>'
+          + '<div class="attempt-note">' + esc(note) + '</div>'
+        + '</div>';
+      }).join('')
+    );
+
+    const successAttempt = attempts.find(a => a.success && a.parts && a.parts.length > 0);
+    if (successAttempt) {
+      html += card('Extracted Parts — ' + esc(successAttempt.formatName),
+        successAttempt.parts.map(p => partRow(p, '')).join('')
+      );
+    }
+    return html;
+  }
+
+  // ── Hex view ──
+  function renderHexView(hex) {
+    const lines = hex.lines || [];
+    const highlights = hex.highlights || {};
+    let linesHtml = '';
+
+    lines.forEach(line => {
+      let cellsHtml = '';
+      const bytes = line.hex ? line.hex.split(' ') : [];
+      bytes.forEach((hexByte, i) => {
+        const offset = line.offset + i;
+        const hl = highlights[String(offset)];
+        if (hl) {
+          cellsHtml += '<span class="hex-cell highlighted" style="background:' + hl[0] + '" title="' + esc(hl[1]) + '">' + hexByte + '</span>';
+        } else {
+          cellsHtml += '<span class="hex-cell">' + hexByte + '</span>';
+        }
+      });
+      linesHtml += '<div class="hex-line">'
+        + '<span class="hex-offset">' + line.offset.toString(16).toUpperCase().padStart(8, '0') + '</span>'
+        + '<span class="hex-data">' + cellsHtml + '</span>'
+        + '<span class="hex-ascii">' + esc(line.ascii) + '</span>'
+      + '</div>';
+    });
+
+    return card('Hex View', '<div class="hex-container">' + linesHtml + '</div>')
+      + '<div class="hex-controls">'
+        + '<button id="hexPrev" ' + (hex.page <= 0 ? 'disabled' : '') + '>&laquo; Prev</button>'
+        + '<span class="page-info">Page ' + (hex.page + 1) + ' / ' + hex.totalPages + ' &mdash; ' + formatBytes(hex.totalBytes) + '</span>'
+        + '<button id="hexNext" ' + (hex.page >= hex.totalPages - 1 ? 'disabled' : '') + '>Next &raquo;</button>'
+        + '<div class="hex-search">'
+          + '<input type="text" id="hexSearchInput" placeholder="Search hex (e.g. FF D8) or ASCII">'
+          + '<button id="hexSearchBtn">Find</button>'
+        + '</div>'
+      + '</div>';
+  }
+
+  function bindHexControls(hex) {
+    const prevBtn = document.getElementById('hexPrev');
+    const nextBtn = document.getElementById('hexNext');
+    const searchBtn = document.getElementById('hexSearchBtn');
+    const searchInput = document.getElementById('hexSearchInput');
+    if (prevBtn) prevBtn.addEventListener('click', () => analyze(currentFile, 'expert'));
+    if (nextBtn) nextBtn.addEventListener('click', () => analyze(currentFile, 'expert'));
+    if (searchBtn) searchBtn.addEventListener('click', doHexSearch);
+    if (searchInput) searchInput.addEventListener('keydown', e => { if (e.key === 'Enter') doHexSearch(); });
+  }
+
+  function doHexSearch() {
+    const query = document.getElementById('hexSearchInput').value.trim();
+    if (!query) return;
+    const cells = document.querySelectorAll('.hex-cell');
+    cells.forEach(c => c.style.outline = '');
+    const isHex = /^[0-9A-Fa-f\s]+$/.test(query);
+    if (!isHex) return;
+    const hexBytes = query.replace(/\s+/g, '').toUpperCase();
+    const searchLen = hexBytes.length / 2;
+    if (searchLen < 1 || searchLen > 16) return;
+    const allText = Array.from(cells).map(c => c.textContent);
+    let first = true;
+    for (let i = 0; i <= allText.length - searchLen; i++) {
+      let match = true;
+      for (let j = 0; j < searchLen; j++) {
+        if (allText[i + j] !== hexBytes.substring(j * 2, j * 2 + 2)) { match = false; break; }
+      }
+      if (match) {
+        for (let j = 0; j < searchLen; j++) cells[i + j].style.outline = '2px solid var(--orange)';
+        if (first) { cells[i].scrollIntoView({ behavior: 'smooth', block: 'center' }); first = false; }
+      }
+    }
+  }
+
+  // ── Scan result ──
+  function renderScanResult(scan) {
+    const elements = scan.elements || [];
+    const summary  = scan.summary  || {};
+    const notes    = scan.notes    || [];
+
+    if (elements.length === 0 && notes.length === 0) {
+      return card('Signature Scan', '<div style="color:var(--text2)">No known signatures found.</div>');
+    }
+
+    const summaryBadges = Object.entries(summary).map(([name, count]) =>
+      '<span class="badge cyan">' + esc(name) + ' x' + count + '</span>'
+    ).join(' ');
+
+    return card('Signature Scan',
+      '<div style="margin-bottom:12px">' + summaryBadges + '</div>'
+      + elements.map((elem, idx) => {
+        const iconClass = elem.mime.startsWith('image/') ? 'image' : elem.mime.startsWith('audio/') ? 'audio' : elem.mime.startsWith('video/') ? 'video' : elem.mime.startsWith('text/') ? 'text' : 'other';
+        const iconChar  = elem.mime.startsWith('image/') ? '&#128444;' : elem.mime.startsWith('audio/') ? '&#127925;' : elem.mime.startsWith('video/') ? '&#127909;' : elem.mime.startsWith('text/') ? '&#128196;' : '&#128451;';
+        const fHash = scan._fileHash || '';
+        const ext = elem.extension || '.bin';
+        const defName = (elem.name || 'element') + '_' + String(elem.offset || 0).toString(16) + ext;
+        const previewHtml = (elem.mime.startsWith('image/') && elem.size)
+          ? '<div class="scan-preview"><img src="/scan-element/' + fHash + '/' + idx + '" alt="' + esc(elem.name) + '" onerror="this.parentElement.style.display=\'none\'"></div>' : '';
+        const dlHtml = elem.size
+          ? '<a class="scan-download" href="/scan-element-download/' + fHash + '/' + idx + '?name=' + encodeURIComponent(defName) + '" download>Extract</a>' : '';
+        return '<div class="scan-element">'
+          + '<div class="scan-icon ' + iconClass + '">' + iconChar + '</div>'
+          + '<div class="scan-info">'
+            + '<div class="scan-name">' + esc(elem.name) + '</div>'
+            + '<div class="scan-meta"><code>' + esc(elem.mime) + '</code> &nbsp; offset <code>0x' + elem.offset.toString(16).toUpperCase() + '</code> &nbsp; ' + (elem.size ? 'size <code>' + formatBytes(elem.size) + '</code>' : 'size unknown') + (elem.notes ? ' &mdash; ' + esc(elem.notes) : '') + '</div>'
+            + previewHtml + dlHtml
+          + '</div>'
+          + '<div class="scan-confidence ' + (elem.confidence || 'medium') + '">' + esc(elem.confidence || 'medium') + '</div>'
+        + '</div>';
+      }).join('')
+      + (notes.length ? '<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);font-size:12px;color:var(--text2)">' + notes.map(n => esc(n)).join('<br>') + '</div>' : '')
+    );
+  }
+
+  // ── Helpers ──
+  function card(title, body) {
+    return '<div class="card"><div class="card-header">' + esc(title) + '</div><div class="card-body">' + body + '</div></div>';
+  }
+
+  function field(label, value) {
+    return '<div class="field-label">' + esc(label) + '</div><div class="field-value">' + value + '</div>';
+  }
+
+  function envRow(label, valueHtml) {
+    return '<div class="env-row"><span class="env-label">' + esc(label) + '</span><span class="env-value">' + valueHtml + '</span></div>';
+  }
+
+  function partRow(p, fHash) {
+    const iconCls = partIconClass(p.contentType);
+    const iconLbl = partIconLabel(p.contentType);
+    const dlName = p.filename || ('part_' + p.index + '.bin');
+    const dlHtml = fHash
+      ? ' <a class="dl-btn" style="padding:2px 8px;font-size:11px" href="/part/' + fHash + '/' + p.index + '?download=1&name=' + encodeURIComponent(dlName) + '" download>&#8595;</a>'
+      : '';
+    return '<div class="part-row">'
+      + '<div class="part-icon ' + iconCls + '">' + iconLbl + '</div>'
+      + '<div class="part-name">' + esc(p.filename || ('Part ' + p.index)) + dlHtml + '</div>'
+      + '<div class="part-type">' + esc(p.contentType) + '</div>'
+      + '<div class="part-size">' + formatBytes(p.size) + '</div>'
+    + '</div>';
+  }
+
+  function partIconClass(ct) {
+    if (!ct) return 'other';
+    if (ct.startsWith('image/')) return 'img';
+    if (ct.startsWith('video/')) return 'vid';
+    if (ct.startsWith('audio/')) return 'aud';
+    if (ct.startsWith('text/'))  return 'txt';
+    if (ct.includes('smil'))     return 'smil';
+    return 'other';
+  }
+
+  function partIconLabel(ct) {
+    if (!ct) return 'BIN';
+    if (ct.startsWith('image/')) return 'IMG';
+    if (ct.startsWith('video/')) return 'VID';
+    if (ct.startsWith('audio/')) return 'AUD';
+    if (ct.startsWith('text/plain')) return 'TXT';
+    if (ct.startsWith('text/html'))  return 'HTM';
+    if (ct.includes('smil'))         return 'SML';
+    return 'BIN';
+  }
+
+  function formatBytes(bytes) {
+    if (bytes == null) return '0 B';
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / 1048576).toFixed(1) + ' MB';
+  }
+
+  function esc(s) {
+    if (s == null) return '';
+    const d = document.createElement('div');
+    d.textContent = String(s);
+    return d.innerHTML;
+  }
+})();
+</script>
+</body>
+</html>
