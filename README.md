@@ -11,6 +11,8 @@ python launch.py
 A browser window opens at `http://127.0.0.1:5820`. Drop any `.mms` file to inspect it.
 
 ## Features
+![示例图片](https://github.com/BG6FGV/MMS-Preview/blob/main/samples/expert.png)
+![示例图片](https://github.com/BG6FGV/MMS-Preview/blob/main/samples/standrad.png)
 
 - Parses MMS PDU binary format (WAP 2.3 / OMA MMS Encapsulation v1.2 & v1.3)
 - Extracts headers, attachments, SMIL layout
